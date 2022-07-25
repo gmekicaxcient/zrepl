@@ -3,11 +3,13 @@ package snapper
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/zrepl/zrepl/daemon/logging/trace"
 
@@ -104,6 +106,18 @@ type updater func(u func(*Snapper)) State
 type state func(a args, u updater) state
 
 type Logger = logger.Logger
+
+var nonexistingDatasets = prometheus.NewGauge(prometheus.GaugeOpts{
+	Namespace: "zrepl",
+	Subsystem: "zfs",
+	Name:      "nonexisting_datasets",
+	Help:      "number of configured datasets that don't exist",
+})
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+	prometheus.Register(nonexistingDatasets)
+}
 
 func getLogger(ctx context.Context) Logger {
 	return logging.GetLogger(ctx, logging.SubsysSnapshot)
@@ -345,6 +359,9 @@ func snapshot(a args, u updater) state {
 		}
 	}
 
+	var value = rand.Float64() * 100
+	fmt.Printf("Filter fields: %+v\n", a.fsf)
+	nonexistingDatasets.Set(value)
 	return u(func(snapper *Snapper) {
 		if anyFsHadErr {
 			snapper.state = ErrorWait

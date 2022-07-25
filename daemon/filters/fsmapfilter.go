@@ -24,6 +24,7 @@ type datasetMapFilterEntry struct {
 	// we have to convert it to the desired rep dynamically
 	mapping      string
 	subtreeMatch bool
+	triggered    bool
 }
 
 func NewDatasetMapFilter(capacity int, filterMode bool) *DatasetMapFilter {
@@ -61,6 +62,7 @@ func (m *DatasetMapFilter) Add(pathPattern, mapping string) (err error) {
 		path:         path,
 		mapping:      mapping,
 		subtreeMatch: patternCount > 0,
+		triggered:    false,
 	}
 	m.entries = append(m.entries, entry)
 	return
