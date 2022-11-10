@@ -126,6 +126,9 @@ outer:
 		invocationCount++
 
 		invocationCtx, endSpan := trace.WithSpan(ctx, fmt.Sprintf("invocation-%d", invocationCount))
+
+		var non = j.fsfilter.ConfigErrors(ctx)
+		zfs.SetMissingCount(j.name.String(), non)
 		j.doPrune(invocationCtx)
 		endSpan()
 	}

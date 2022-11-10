@@ -193,6 +193,9 @@ func (s *Sender) Send(ctx context.Context, r *pdu.SendReq) (*pdu.SendRes, io.Rea
 		return nil, nil, err
 	}
 
+	var non = s.FSFilter.ConfigErrors(ctx)
+	zfs.SetMissingCount(s.jobId.String(), non)
+
 	// create holds or bookmarks of `From` and `To` to guarantee one of the following:
 	// - that the replication step can always be resumed (`holds`),
 	// - that the replication step can be interrupted and a future replication
@@ -587,6 +590,14 @@ func (f subroot) Filter(p *zfs.DatasetPath) (pass bool, err error) {
 	return p.HasPrefix(f.localRoot) && !p.Equal(f.localRoot), nil
 }
 
+func (f subroot) ConfigErrors(ctx context.Context) (count float64) {
+	rphs, err := zfs.ZFSGetFilesystemPlaceholderState(ctx, f.localRoot)
+	if err != nil || !rphs.FSExists {
+		return 1
+	}
+	return 0
+}
+
 func (f subroot) MapToLocal(fs string) (*zfs.DatasetPath, error) {
 	p, err := zfs.NewDatasetPath(fs)
 	if err != nil {
@@ -608,8 +619,10 @@ func (s *Receiver) ListFilesystems(ctx context.Context, req *pdu.ListFilesystemR
 		return nil, errors.Wrap(err, "cannot determine whether root_fs exists")
 	} else if !rphs.FSExists {
 		getLogger(ctx).WithField("root_fs", s.conf.RootWithoutClientComponent).Error("root_fs does not exist")
+		zfs.SetMissingCount(s.conf.JobID.String(), 1)
 		return nil, errors.Errorf("root_fs does not exist")
 	}
+	zfs.SetMissingCount(s.conf.JobID.String(), 0)
 
 	root := s.clientRootFromCtx(ctx)
 	filtered, err := zfs.ZFSListMapping(ctx, subroot{root})
@@ -748,6 +761,8 @@ func (s *Receiver) Receive(ctx context.Context, req *pdu.ReceiveReq, receive io.
 	lp, err := subroot{root}.MapToLocal(req.Filesystem)
 	if err != nil {
 		return nil, errors.Wrap(err, "`Filesystem` invalid")
+	} else {
+		zfs.SetMissingCount(s.conf.JobID.String(), 0)
 	}
 
 	to := uncheckedSendArgsFromPDU(req.GetTo())
@@ -794,6 +809,7 @@ func (s *Receiver) Receive(ctx context.Context, req *pdu.ReceiveReq, receive io.
 			}
 
 			if !ph.FSExists {
+				zfs.SetMissingCount(s.conf.JobID.String(), 1)
 				if s.conf.RootWithoutClientComponent.HasPrefix(v.Path) {
 					if v.Path.Length() == 1 {
 						visitErr = fmt.Errorf("pool %q not imported", v.Path.ToString())
@@ -825,6 +841,7 @@ func (s *Receiver) Receive(ctx context.Context, req *pdu.ReceiveReq, receive io.
 				l.Info("created placeholder filesystem")
 				return true
 			} else {
+				zfs.SetMissingCount(s.conf.JobID.String(), 0)
 				l.Debug("filesystem exists")
 				return true // leave this fs as is
 			}

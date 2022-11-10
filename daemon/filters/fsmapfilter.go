@@ -1,6 +1,7 @@
 package filters
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -31,6 +32,22 @@ func NewDatasetMapFilter(capacity int, filterMode bool) *DatasetMapFilter {
 		entries:    make([]datasetMapFilterEntry, 0, capacity),
 		filterMode: filterMode,
 	}
+}
+
+func (m *DatasetMapFilter) ConfigErrors(ctx context.Context) (count float64) {
+	count = 0
+	for index := range m.entries {
+		var datasets, _ = zfs.ZFSListMapping(ctx, m)
+		var exists = false
+		for _, dataset := range datasets {
+			exists = exists || m.entries[index].path.Equal(dataset)
+		}
+		if (!exists) {
+			count = count + 1
+		}
+
+	}
+	return count
 }
 
 func (m *DatasetMapFilter) Add(pathPattern, mapping string) (err error) {

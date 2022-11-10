@@ -7,6 +7,8 @@ var prom struct {
 	ZFSSnapshotDuration              *prometheus.HistogramVec
 	ZFSBookmarkDuration              *prometheus.HistogramVec
 	ZFSDestroyDuration               *prometheus.HistogramVec
+	ZFSMissingDatasets               *prometheus.GaugeVec
+
 }
 
 func init() {
@@ -34,6 +36,12 @@ func init() {
 		Name:      "destroy_duration",
 		Help:      "Duration it took to destroy a dataset",
 	}, []string{"dataset_type", "filesystem"})
+	prom.ZFSMissingDatasets = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "zrepl",
+		Subsystem: "zfs",
+		Name:      "unmatched_dataset_filter_rule_count",
+		Help:      "number of configured datasets that don't exist",
+	}, []string{"zrepl_job"})
 }
 
 func PrometheusRegister(registry prometheus.Registerer) error {
@@ -49,5 +57,12 @@ func PrometheusRegister(registry prometheus.Registerer) error {
 	if err := registry.Register(prom.ZFSDestroyDuration); err != nil {
 		return err
 	}
+	if err := registry.Register(prom.ZFSMissingDatasets); err != nil {
+		return err
+	}
 	return nil
+}
+
+func SetMissingCount(job string, count float64) {
+  prom.ZFSMissingDatasets.WithLabelValues(job).Set(count)
 }
